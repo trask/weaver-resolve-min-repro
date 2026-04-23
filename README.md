@@ -91,6 +91,21 @@ All five runs should produce byte-identical `docs/repro.md` output.
 At least one pair of runs differs in attribute link targets and/or in the
 presence of the `invoke_workflow` enum member.
 
+## Root cause (upstream)
+
+Traced to `AttributeCatalog.root_attributes: HashMap<String, AttributeWithSource>`
+in [weaver_resolver/src/attribute.rs](https://github.com/open-telemetry/weaver/blob/v0.23.0/crates/weaver_resolver/src/attribute.rs).
+When an attribute is defined or ref'd from multiple groups, which `group_id`
+first populates the `HashMap` entry for that attribute depends on upstream
+group-iteration order (also `HashMap`-based). The stored `group_id` becomes
+`AttributeLineage.source_group`, which the semantic-conventions markdown
+templates feed into `name_with_link()` to compute the link filename
+(`{registry_base_url}/{first non-"registry" part of source_group}.md`).
+Hence the flipping of `gen-ai.md` / `event.md` / `server.md` / `error.md` /
+`attributes.md` across runs (Mode 1). The same insertion-order race causes
+the locally-extended enum members (e.g. `invoke_workflow`) to sometimes
+vs. never be merged into the cached root attribute (Mode 2).
+
 ## Notes
 
 - This is separate from the `weaver registry resolve` fresh-cache
